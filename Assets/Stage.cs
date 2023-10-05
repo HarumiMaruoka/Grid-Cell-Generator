@@ -10,10 +10,10 @@ public class Stage : ScriptableObject
     // ToDo: 一応クローンして使うのでClone()作る。
     [SerializeField]
     [Range(1, 20)]
-    private int _width = 0;
+    private int _width = 1;
     [SerializeField]
     [Range(1, 20)]
-    private int _height = 0;
+    private int _height = 1;
     [SerializeField]
     private Cell[] _cells;
 
@@ -24,11 +24,23 @@ public class Stage : ScriptableObject
     [Range(0, 20)]
     private int _editYPosition = 0;
 
+    public int Width => _width;
+    public int Height => _height;
     public Cell[] Cells => _cells;
 
     public Action<Vector2Int, Vector2Int> OnSelectionChanged;
 
-    private bool IsInIndex(ref Cell[] cells, int yLength, int xLength, int y, int x)
+    public void Start() // 初めて起動する際に一度だけ呼んでください。
+    {
+        foreach (var cell in _cells) cell.Start();
+    }
+
+    public void Update() // 毎フレーム実行してください。
+    {
+        foreach (var cell in _cells) cell.Update();
+    }
+
+    private bool IsInIndex(Cell[] cells, int yLength, int xLength, int y, int x)
     {
         return cells != null &&
             y >= 0 && y < yLength &&
@@ -40,15 +52,27 @@ public class Stage : ScriptableObject
         return y * width + x;
     }
 
-    public Cell GetCell(int y, int x)
+    public bool TryGetCell(Cell[] array, int height, int width, int y, int x, out Cell cell)
     {
-        if (IsInIndex(ref _cells, _height, _width, y, x))
+        if (IsInIndex(array, height, width, y, x))
         {
-            return _cells[GetIndex(_width, y, x)];
+            var index = GetIndex(width, y, x);
+            if (index >= 0 && index < array.Length)
+            {
+                cell = array[index];
+                return true;
+            }
+            else
+            {
+                Debug.LogWarning($"IsInIndexが正しく働いてません。index: {index}, height: {height}, width{width}, y: {y}, x: {x}");
+                cell = null;
+                return false;
+            }
         }
         else
         {
-            return null;
+            cell = null;
+            return false;
         }
     }
 
@@ -61,20 +85,44 @@ public class Stage : ScriptableObject
             for (int xIndex = 0; xIndex < _width; xIndex++)
             {
                 if (old != null &&
-                    IsInIndex(ref old, oldHeight, oldWidth, yIndex, xIndex) &&
-                    IsInIndex(ref _cells, _height, _width, yIndex, xIndex))
+                    IsInIndex(old, oldHeight, oldWidth, yIndex, xIndex) &&
+                    IsInIndex(_cells, _height, _width, yIndex, xIndex))
                 {
                     _cells[GetIndex(_width, yIndex, xIndex)] = old[GetIndex(oldWidth, yIndex, xIndex)];
+                    // オブジェクトがコピーされた場合、古いオブジェクトを破棄
+                    old[GetIndex(oldWidth, yIndex, xIndex)] = null;
                 }
 
                 if (_cells[GetIndex(_width, yIndex, xIndex)] == null)
                 {
                     _cells[GetIndex(_width, yIndex, xIndex)] = CreateInstance<Cell>();
                     AssetDatabase.AddObjectToAsset(_cells[GetIndex(_width, yIndex, xIndex)], this);
+                    _cells[GetIndex(_width, yIndex, xIndex)].name = $"Cell: Y: {yIndex}, X: {xIndex}";
                 }
             }
         }
+        // 不要なオブジェクトを破棄
+        for (int i = 0; i < old.Length; i++)
+        {
+            if (old[i] != null)
+            {
+                ScriptableObject.DestroyImmediate(old[i], true);
+            }
+        }
         AssetDatabase.SaveAssets();
+    }
+
+    public Stage Clone()
+    {
+        var clone = CreateInstance<Stage>();
+        clone._cells = new Cell[_width * _height];
+
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            clone._cells[i] = _cells[i].Clone();
+        }
+
+        return clone;
     }
 }
 
@@ -96,10 +144,10 @@ public class StageInspectorViewer : Editor
             Debug.Log("なんかミスってる。");
             return;
         }
-        _cachedWidth = serializedObject.FindProperty("_width").intValue;
-        _cachedHeight = serializedObject.FindProperty("_height").intValue;
-        _cachedXPos = serializedObject.FindProperty("_editXPosition").intValue;
-        _cachedYPos = serializedObject.FindProperty("_editYPosition").intValue;
+        //_cachedWidth = serializedObject.FindProperty("_width").intValue;
+        //_cachedHeight = serializedObject.FindProperty("_height").intValue;
+        //_cachedXPos = serializedObject.FindProperty("_editXPosition").intValue;
+        //_cachedYPos = serializedObject.FindProperty("_editYPosition").intValue;
     }
 
     public override void OnInspectorGUI()
@@ -135,14 +183,14 @@ public class StageInspectorViewer : Editor
         // EditorGUILayout.PropertyField(serializedObject.FindProperty("_cells"));
 
         GameObject.DestroyImmediate(_selectCellEditor);
-        if (_stage.GetCell(yPosProperty.intValue, xPosProperty.intValue) == null)
+        if (_stage.TryGetCell(_stage.Cells, _cachedHeight, _cachedWidth, _cachedYPos, _cachedXPos, out Cell cell))
         {
-            EditorGUILayout.LabelField("HoverItem is null");
+            _selectCellEditor = CreateEditor(cell);
+            _selectCellEditor.OnInspectorGUI();
         }
         else
         {
-            _selectCellEditor = CreateEditor(_stage.GetCell(yPosProperty.intValue, xPosProperty.intValue));
-            _selectCellEditor.OnInspectorGUI();
+            EditorGUILayout.LabelField("HoverItem is null", boldtext);
         }
 
         if (isResize) Resize(widthProperty, heightProperty);
@@ -180,8 +228,14 @@ public class StageInspectorViewer : Editor
             var oldPos = new Vector2Int(_cachedXPos, _cachedYPos);
             var newPos = new Vector2Int(xPos.intValue, _cachedYPos);
             _stage.OnSelectionChanged?.Invoke(oldPos, newPos);
-            _stage.GetCell(oldPos.y, oldPos.x)?.Unhover();
-            _stage.GetCell(newPos.y, newPos.x)?.Hover();
+            if (_stage.TryGetCell(_stage.Cells, _cachedHeight, _cachedWidth, oldPos.y, oldPos.x, out Cell oldCell))
+            {
+                oldCell?.Unhover();
+            }
+            if (_stage.TryGetCell(_stage.Cells, _cachedHeight, _cachedWidth, newPos.y, newPos.x, out Cell newCell))
+            {
+                newCell?.Hover();
+            }
             _cachedXPos = xPos.intValue;
         }
         if (_cachedYPos != yPos.intValue)
@@ -189,13 +243,19 @@ public class StageInspectorViewer : Editor
             var oldPos = new Vector2Int(_cachedXPos, _cachedYPos);
             var newPos = new Vector2Int(_cachedXPos, yPos.intValue);
             _stage.OnSelectionChanged?.Invoke(oldPos, newPos);
-            _stage.GetCell(oldPos.y, oldPos.x)?.Unhover();
-            _stage.GetCell(newPos.y, newPos.x)?.Hover();
+            if (_stage.TryGetCell(_stage.Cells, _cachedHeight, _cachedWidth, oldPos.y, oldPos.x, out Cell oldCell))
+            {
+                oldCell?.Unhover();
+            }
+            if (_stage.TryGetCell(_stage.Cells, _cachedHeight, _cachedWidth, newPos.y, newPos.x, out Cell newCell))
+            {
+                newCell?.Hover();
+            }
             _cachedYPos = yPos.intValue;
         }
     }
 
-    public static void Separator() // 仕切り線表示
+    public void Separator() // 仕切り線を表示する。
     {
         EditorGUILayout.BeginHorizontal();
         GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(3));

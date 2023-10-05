@@ -3,6 +3,8 @@ using System;
 
 public interface ISelectable
 {
+    bool IsHovered { get; }
+
     event Action OnHovered;
     event Action OnUnhovered;
 

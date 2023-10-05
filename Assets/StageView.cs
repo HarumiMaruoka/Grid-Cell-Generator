@@ -1,20 +1,24 @@
 // 日本語対応
 using UnityEngine;
+using UnityEngine.UI;
 
 public class StageView : MonoBehaviour
 {
     [SerializeField]
     private Stage _stageData;
     [SerializeField]
-    private Transform _cellViewParent;
+    private GridLayoutGroup _cellViewParent;
     [SerializeField]
     private CellView _cellViewPrefab;
 
     private void Start()
     {
+        _cellViewParent.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+        _cellViewParent.constraintCount = _stageData.Height;
+
         foreach (var item in _stageData.Cells)
         {
-            var cellView = Instantiate(_cellViewPrefab, _cellViewParent);
+            var cellView = Instantiate(_cellViewPrefab, _cellViewParent.transform);
             item.OnHovered += cellView.Hover;
             item.OnUnhovered += cellView.Unhover;
             if (item.IsHovered) { cellView.Hover(); }
@@ -31,8 +35,5 @@ public class StageView : MonoBehaviour
     // 選択オブジェクトの変更が入ったとき
     private void UpdateSelection(Vector2Int oldPos, Vector2Int newPos)
     {
-        Debug.Log("変更されたよ");
-        _stageData.GetCell(oldPos.y, oldPos.x);
-        _stageData.GetCell(newPos.y, newPos.x);
     }
 }
