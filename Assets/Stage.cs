@@ -19,15 +19,11 @@ public class Stage : ScriptableObject
 
     [SerializeField]
     [Range(0, 20)]
-    private int _x = 0;
+    private int _editXPosition = 0;
     [SerializeField]
     [Range(0, 20)]
-    private int _y = 0;
+    private int _editYPosition = 0;
 
-    public int Width => _width;
-    public int Height => _height;
-    public int X => _x;
-    public int Y => _y;
     public Cell[] Cells => _cells;
 
     public Action<Vector2Int, Vector2Int> OnSelectionChanged;
@@ -41,7 +37,6 @@ public class Stage : ScriptableObject
 
     private int GetIndex(int width, int y, int x)
     {
-        // 2次元インデックスを1次元に変換する式
         return y * width + x;
     }
 
@@ -103,23 +98,36 @@ public class StageInspectorViewer : Editor
         }
         _cachedWidth = serializedObject.FindProperty("_width").intValue;
         _cachedHeight = serializedObject.FindProperty("_height").intValue;
-        _cachedXPos = serializedObject.FindProperty("_x").intValue;
-        _cachedYPos = serializedObject.FindProperty("_y").intValue;
+        _cachedXPos = serializedObject.FindProperty("_editXPosition").intValue;
+        _cachedYPos = serializedObject.FindProperty("_editYPosition").intValue;
     }
 
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
 
+        var boldtext = new GUIStyle(GUI.skin.label);
+        boldtext.fontStyle = FontStyle.Bold;
+
+        EditorGUILayout.LabelField("Stage Inspector", boldtext);
+
         var widthProperty = serializedObject.FindProperty("_width");
         var heightProperty = serializedObject.FindProperty("_height");
 
-        var xPosProperty = serializedObject.FindProperty("_x");
-        var yPosProperty = serializedObject.FindProperty("_y");
+        var xPosProperty = serializedObject.FindProperty("_editXPosition");
+        var yPosProperty = serializedObject.FindProperty("_editYPosition");
 
         EditorGUILayout.PropertyField(widthProperty);
         EditorGUILayout.PropertyField(heightProperty);
 
+        EditorGUILayout.BeginHorizontal();
+        bool isResize = GUILayout.Button("Resize");
+        bool isCancel = GUILayout.Button("Cancel");
+        EditorGUILayout.EndHorizontal();
+
+        Separator();
+
+        EditorGUILayout.LabelField("Cell Inspector", boldtext);
         EditorGUILayout.PropertyField(xPosProperty);
         EditorGUILayout.PropertyField(yPosProperty);
 
@@ -136,35 +144,61 @@ public class StageInspectorViewer : Editor
             _selectCellEditor = CreateEditor(_stage.GetCell(yPosProperty.intValue, xPosProperty.intValue));
             _selectCellEditor.OnInspectorGUI();
         }
-        serializedObject.ApplyModifiedProperties();
 
-        if (_cachedWidth != widthProperty.intValue)
+        if (isResize) Resize(widthProperty, heightProperty);
+        if (isCancel) Cancel(widthProperty, heightProperty);
+
+        SelectionChange(xPosProperty, yPosProperty);
+
+        serializedObject.ApplyModifiedProperties();
+    }
+
+    private void Resize(SerializedProperty width, SerializedProperty height)
+    {
+        if (_cachedWidth != width.intValue)
         {
             _stage.ResizeCells(_cachedHeight, _cachedWidth);
-            _cachedWidth = widthProperty.intValue;
+            _cachedWidth = width.intValue;
         }
-        if (_cachedHeight != heightProperty.intValue)
+        if (_cachedHeight != height.intValue)
         {
             _stage.ResizeCells(_cachedHeight, _cachedWidth);
-            _cachedHeight = heightProperty.intValue;
+            _cachedHeight = height.intValue;
         }
-        if (_cachedXPos != xPosProperty.intValue)
+    }
+
+    private void Cancel(SerializedProperty width, SerializedProperty height)
+    {
+        width.intValue = _cachedWidth;
+        height.intValue = _cachedHeight;
+    }
+
+    private void SelectionChange(SerializedProperty xPos, SerializedProperty yPos)
+    {
+        if (_cachedXPos != xPos.intValue)
         {
             var oldPos = new Vector2Int(_cachedXPos, _cachedYPos);
-            var newPos = new Vector2Int(xPosProperty.intValue, _cachedYPos);
+            var newPos = new Vector2Int(xPos.intValue, _cachedYPos);
             _stage.OnSelectionChanged?.Invoke(oldPos, newPos);
             _stage.GetCell(oldPos.y, oldPos.x)?.Unhover();
             _stage.GetCell(newPos.y, newPos.x)?.Hover();
-            _cachedXPos = xPosProperty.intValue;
+            _cachedXPos = xPos.intValue;
         }
-        if (_cachedYPos != yPosProperty.intValue)
+        if (_cachedYPos != yPos.intValue)
         {
             var oldPos = new Vector2Int(_cachedXPos, _cachedYPos);
-            var newPos = new Vector2Int(_cachedXPos, yPosProperty.intValue);
+            var newPos = new Vector2Int(_cachedXPos, yPos.intValue);
             _stage.OnSelectionChanged?.Invoke(oldPos, newPos);
             _stage.GetCell(oldPos.y, oldPos.x)?.Unhover();
             _stage.GetCell(newPos.y, newPos.x)?.Hover();
-            _cachedYPos = yPosProperty.intValue;
+            _cachedYPos = yPos.intValue;
         }
+    }
+
+    public static void Separator() // 仕切り線表示
+    {
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(3));
+        EditorGUILayout.EndHorizontal();
     }
 }
