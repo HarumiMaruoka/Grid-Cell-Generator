@@ -1,8 +1,11 @@
 // 日本語対応
 using UnityEngine;
 
-public class EnemySpawner : CellComponent
+namespace GridCell
 {
-    [SerializeField]
-    private float _spawnTime;
+    public class EnemySpawner : CellComponent
+    {
+        [SerializeField]
+        private float _spawnTime;
+    }
 }

@@ -1,190 +1,166 @@
 // 日本語対応
+using GridCell;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-public class Cell : ScriptableObject, ISelectable
+namespace GridCell
 {
-    [SerializeField]
-    private CellStatus _cellStatus = CellStatus.None;
-    [SerializeField]
-    private List<CellComponent> _cellCompoents; // ToDo: セルコンポーネントの取り外しが容易になるようにインスペクタをカスタマイズする。
-
-    private bool _isHovered;
-    public bool IsHovered => _isHovered;
-
-    public List<CellComponent> CellComponents { get => _cellCompoents; set => _cellCompoents = value; }
-
-    public event Action OnHovered;
-    public event Action OnUnhovered;
-
-    public void Start() // 初めて起動する際に一度だけ呼んでください。
+    public class Cell : ScriptableObject, ISelectable
     {
-        foreach (var attachment in _cellCompoents) attachment.Start();
-    }
-    public void Update() // 毎フレーム実行してください。
-    {
-        foreach (var attachment in _cellCompoents) attachment.Update();
-    }
+        [SerializeField]
+        private CellStatus _cellStatus = CellStatus.None;
+        [SerializeField]
+        private List<CellComponent> _cellCompoents; // ToDo: セルコンポーネントの取り外しが容易になるようにインスペクタをカスタマイズする。
 
-    public void Hover()
-    {
-        _isHovered = true;
-        OnHovered?.Invoke();
-    }
+        private bool _isHovered;
+        public bool IsHovered => _isHovered;
 
-    public void Unhover()
-    {
-        _isHovered = false;
-        OnUnhovered?.Invoke();
-    }
+        public List<CellComponent> CellComponents { get => _cellCompoents; set => _cellCompoents = value; }
 
-    public void Dispose()
-    {
-        OnHovered = null;
-        OnUnhovered = null;
-        Unhover();
-    }
+        public event Action OnHovered;
+        public event Action OnUnhovered;
 
-    public Cell Clone()
-    {
-        return Instantiate(this);
-    }
-}
-
-[Serializable]
-[Flags]
-public enum CellStatus : int
-{
-    None = 0,
-    Everything = -1,
-    Movable = 1, // 通行可能かどうか
-    UnitPlaceable = 2, // ユニットが配置可能かどうか
-}
-
-[CustomEditor(typeof(Cell))]
-public class CellInspectorView : Editor
-{
-    private Cell _cell;
-    private Editor _attachmentEditor; // このコメントは後で消す。描画の度に破棄しているけどもしかしたら上手く動かないかも。動かなかったらListとかHashSetでもつと上手く動くかも。
-
-    private void OnEnable()
-    {
-        _cell = target as Cell;
-        if (_cell == null)
+        public void Start() // 初めて起動する際に一度だけ呼んでください。
         {
-            Debug.Log("なんかミスってる。");
-            return;
+            foreach (var attachment in _cellCompoents) attachment.Start();
+        }
+        public void Update() // 毎フレーム実行してください。
+        {
+            foreach (var attachment in _cellCompoents) attachment.Update();
         }
 
-        if (_cell.CellComponents == null) _cell.CellComponents = new List<CellComponent>();
-    }
-
-    public override void OnInspectorGUI()
-    {
-        serializedObject.Update();
-
-        var select = AttachmentSelector();
-
-        if (select != CellAttachmentType.Select)
+        public void Hover()
         {
-            AddCellAttachment(select);
+            _isHovered = true;
+            OnHovered?.Invoke();
         }
 
-        if (GUILayout.Button("Clear"))
+        public void Unhover()
         {
-            foreach (var item in _cell.CellComponents)
-                DestroyImmediate(item, true);
-            _cell.CellComponents.Clear();
+            _isHovered = false;
+            OnUnhovered?.Invoke();
         }
 
-        CellAttachmentInspectorView();
-
-        serializedObject.ApplyModifiedProperties();
-    }
-
-    private CellAttachmentType AttachmentSelector()
-    {
-        return (CellAttachmentType)EditorGUILayout.EnumPopup("Select Add Component", CellAttachmentType.Select);
-    }
-
-    private void AddCellAttachment(CellAttachmentType type)
-    {
-        var attachment = type.ToCellAttachment();
-        attachment.name = $"{type.ToString()}, Parent: {_cell.name}";
-        _cell.CellComponents.Add(attachment);
-        AssetDatabase.AddObjectToAsset(attachment, _cell);
-        AssetDatabase.SaveAssets();
-    }
-
-    private void RemoveCellAttachment(CellAttachmentType type)
-    {
-        CellComponent removeObj = null;
-        foreach (var item in _cell.CellComponents)
+        public void Dispose()
         {
-            if (item.ToCellAttachmentType() == type)
+            OnHovered = null;
+            OnUnhovered = null;
+            Unhover();
+        }
+
+        public Cell Clone()
+        {
+            return Instantiate(this);
+        }
+    }
+
+
+
+    [CustomEditor(typeof(Cell))]
+    public class CellInspectorView : Editor
+    {
+        private Cell _cell;
+        private Editor _attachmentEditor;
+
+        private void OnEnable()
+        {
+            _cell = target as Cell;
+            if (_cell == null)
             {
-                removeObj = item;
-                break;
+                Debug.Log("なんかミスってる。");
+                return;
+            }
+
+            if (_cell.CellComponents == null) _cell.CellComponents = new List<CellComponent>();
+        }
+
+        public override void OnInspectorGUI()
+        {
+            serializedObject.Update();
+
+            var cellStatusProperty = serializedObject.FindProperty("_cellStatus");
+            EditorGUILayout.PropertyField(cellStatusProperty);
+
+            var select = AttachmentSelector();
+
+            if (select != CellComponentType.Select)
+            {
+                AddCellAttachment(select);
+            }
+
+            if (GUILayout.Button("Clear")) // コンポーネントまとめて削除。（テスト用。）
+            {
+                foreach (var item in _cell.CellComponents)
+                    DestroyImmediate(item, true);
+                _cell.CellComponents.Clear();
+            }
+
+            CellAttachmentInspectorView();
+
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private CellComponentType AttachmentSelector()
+        {
+            return (CellComponentType)EditorGUILayout.EnumPopup("Select Add Component", CellComponentType.Select);
+        }
+
+        private void AddCellAttachment(CellComponentType type)
+        {
+            var attachment = type.ToCellComponent();
+            attachment.name = $"{type.ToString()}, Parent: {_cell.name}";
+            _cell.CellComponents.Add(attachment);
+            AssetDatabase.AddObjectToAsset(attachment, _cell);
+            AssetDatabase.SaveAssets();
+        }
+
+        private void RemoveCellAttachment(CellComponentType type)
+        {
+            CellComponent removeObj = null;
+            foreach (var item in _cell.CellComponents)
+            {
+                if (item.ToCellComponentType() == type)
+                {
+                    removeObj = item;
+                    break;
+                }
+            }
+            if (removeObj != null)
+            {
+                _cell.CellComponents.Remove(removeObj);
+            }
+            else
+            {
+                Debug.LogWarning("指定された型のオブジェクトが見つかりませんでした。");
+            }
+            AssetDatabase.SaveAssets();
+        }
+
+        private void CellAttachmentInspectorView()
+        {
+            foreach (var component in _cell.CellComponents)
+            {
+                Separator();
+                DestroyImmediate(_attachmentEditor);
+                _attachmentEditor = CreateEditor(component);
+                _attachmentEditor.OnInspectorGUI();
             }
         }
-        if (removeObj != null)
+
+        public void Separator() // 仕切り線を表示する。
         {
-            _cell.CellComponents.Remove(removeObj);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(3));
+            EditorGUILayout.EndHorizontal();
         }
-        else
-        {
-            Debug.LogWarning("指定された型のオブジェクトが見つかりませんでした。");
-        }
-        AssetDatabase.SaveAssets();
+
     }
 
-    private void CellAttachmentInspectorView()
+    public enum CellComponentType
     {
-        foreach (var component in _cell.CellComponents)
-        {
-            DestroyImmediate(_attachmentEditor);
-            _attachmentEditor = CreateEditor(component);
-            _attachmentEditor.OnInspectorGUI();
-        }
-    }
-
-    public void Separator() // 仕切り線を表示する。
-    {
-        EditorGUILayout.BeginHorizontal();
-        GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(3));
-        EditorGUILayout.EndHorizontal();
-    }
-
-}
-
-public enum CellAttachmentType
-{
-    Select, // 選択中を表現する。
-    EnemySpawner,
-}
-
-public static class Converter
-{
-    public static CellComponent ToCellAttachment(this CellAttachmentType type)
-    {
-        switch (type)
-        {
-            case CellAttachmentType.EnemySpawner: return ScriptableObject.CreateInstance<EnemySpawner>();
-            default: throw new ArgumentException(nameof(type));
-        }
-    }
-
-    public static CellAttachmentType ToCellAttachmentType(this CellComponent obj)
-    {
-        if (obj is EnemySpawner)
-        {
-            return CellAttachmentType.EnemySpawner;
-        }
-        else
-        {
-            throw new ArgumentException(nameof(obj));
-        }
+        Select, // 選択中を表現する。
+        EnemySpawner,
     }
 }

@@ -1,13 +1,16 @@
 // 日本語対応
 using System;
 
-public interface ISelectable
+namespace GridCell
 {
-    bool IsHovered { get; }
+        public interface ISelectable
+        {
+            bool IsHovered { get; }
 
-    event Action OnHovered;
-    event Action OnUnhovered;
+            event Action OnHovered;
+            event Action OnUnhovered;
 
-    void Hover();
-    void Unhover();
+            void Hover();
+            void Unhover();
+        }
 }
