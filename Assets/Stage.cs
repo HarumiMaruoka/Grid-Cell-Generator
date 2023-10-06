@@ -8,7 +8,6 @@ namespace GridCell
     [CreateAssetMenu()]
     public class Stage : ScriptableObject
     {
-        // ToDo: 一応クローンして使うのでClone()作る。
         [SerializeField]
         [Range(1, 20)]
         private int _width = 0;

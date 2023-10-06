@@ -1,5 +1,4 @@
 // 日本語対応
-using GridCell;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -15,12 +14,23 @@ namespace GridCell
         private List<CellComponent> _cellCompoents; // ToDo: セルコンポーネントの取り外しが容易になるようにインスペクタをカスタマイズする。
 
         private bool _isHovered;
-        public bool IsHovered => _isHovered;
+        private int _xIndex;
+        private int _yIndex;
+        private Vector3 _position;
 
-        public List<CellComponent> CellComponents { get => _cellCompoents; set => _cellCompoents = value; }
+        public List<CellComponent> CellComponents => _cellCompoents;
+        public bool IsHovered => _isHovered;
+        public int XIndex => _xIndex;
+        public int YIndex => _yIndex;
+        public Vector3 Position => _position;
 
         public event Action OnHovered;
         public event Action OnUnhovered;
+
+        public void Initialize(int xIndex, int yIndex, Vector3 position)
+        {
+            _xIndex = xIndex; _yIndex = yIndex; _position = position;
+        }
 
         public void Start() // 初めて起動する際に一度だけ呼んでください。
         {
@@ -56,8 +66,6 @@ namespace GridCell
         }
     }
 
-
-
     [CustomEditor(typeof(Cell))]
     public class CellInspectorView : Editor
     {
@@ -66,14 +74,14 @@ namespace GridCell
 
         private void OnEnable()
         {
+            serializedObject.ApplyModifiedProperties();
+
             _cell = target as Cell;
             if (_cell == null)
             {
                 Debug.Log("なんかミスってる。");
                 return;
             }
-
-            if (_cell.CellComponents == null) _cell.CellComponents = new List<CellComponent>();
         }
 
         public override void OnInspectorGUI()
@@ -87,7 +95,7 @@ namespace GridCell
 
             if (select != CellComponentType.Select)
             {
-                AddCellAttachment(select);
+                AddCellComponent(select);
             }
 
             if (GUILayout.Button("Clear")) // コンポーネントまとめて削除。（テスト用。）
@@ -107,7 +115,7 @@ namespace GridCell
             return (CellComponentType)EditorGUILayout.EnumPopup("Select Add Component", CellComponentType.Select);
         }
 
-        private void AddCellAttachment(CellComponentType type)
+        private void AddCellComponent(CellComponentType type)
         {
             var attachment = type.ToCellComponent();
             attachment.name = $"{type.ToString()}, Parent: {_cell.name}";
@@ -116,20 +124,37 @@ namespace GridCell
             AssetDatabase.SaveAssets();
         }
 
-        private void RemoveCellAttachment(CellComponentType type)
+        private void RemoveCellComponent(CellComponentType type)
         {
             CellComponent removeObj = null;
-            foreach (var item in _cell.CellComponents)
+            foreach (var component in _cell.CellComponents)
             {
-                if (item.ToCellComponentType() == type)
+                if (component.ToCellComponentType() == type)
                 {
-                    removeObj = item;
+                    removeObj = component;
                     break;
                 }
             }
             if (removeObj != null)
             {
                 _cell.CellComponents.Remove(removeObj);
+                DestroyImmediate(removeObj, true);
+            }
+            else
+            {
+                Debug.LogWarning("指定された型のオブジェクトが見つかりませんでした。");
+            }
+            AssetDatabase.SaveAssets();
+        }
+
+        private void RemoveCellComponent(CellComponent obj)
+        {
+            if (obj != null)
+            {
+                if (_cell.CellComponents.Remove(obj))
+                {
+                    DestroyImmediate(obj, true);
+                }
             }
             else
             {
@@ -140,6 +165,7 @@ namespace GridCell
 
         private void CellAttachmentInspectorView()
         {
+            if (_cell.CellComponents == null) return;
             foreach (var component in _cell.CellComponents)
             {
                 Separator();
