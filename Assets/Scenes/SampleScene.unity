@@ -481,6 +481,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f3c3eda236b44342a587e1525f3c019, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _stageData: {fileID: 11400000, guid: 5c94d50098b0c9645994e870c58b627e, type: 2}
+  _stageData: {fileID: 0}
   _cellViewParent: {fileID: 850274205}
   _cellViewPrefab: {fileID: 6934468121564952300, guid: 127d5d49064061744b49760ba82290fe, type: 3}

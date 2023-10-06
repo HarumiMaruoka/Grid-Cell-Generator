@@ -11,14 +11,14 @@ namespace GridCell
         [SerializeField]
         private CellStatus _cellStatus = CellStatus.None;
         [SerializeField]
-        private List<CellComponent> _cellCompoents; // ToDo: セルコンポーネントの取り外しが容易になるようにインスペクタをカスタマイズする。
+        private List<CellComponent> _cellComponents; // ToDo: セルコンポーネントの取り外しが容易になるようにインスペクタをカスタマイズする。
 
         private bool _isHovered;
         private int _xIndex;
         private int _yIndex;
         private Vector3 _position;
 
-        public List<CellComponent> CellComponents => _cellCompoents;
+        public List<CellComponent> CellComponents => _cellComponents ??= new List<CellComponent>();
         public bool IsHovered => _isHovered;
         public int XIndex => _xIndex;
         public int YIndex => _yIndex;
@@ -34,11 +34,11 @@ namespace GridCell
 
         public void Start() // 初めて起動する際に一度だけ呼んでください。
         {
-            foreach (var attachment in _cellCompoents) attachment.Start();
+            foreach (var component in CellComponents) component.Start();
         }
         public void Update() // 毎フレーム実行してください。
         {
-            foreach (var attachment in _cellCompoents) attachment.Update();
+            foreach (var component in CellComponents) component.Update();
         }
 
         public void Hover()
@@ -63,6 +63,54 @@ namespace GridCell
         public Cell Clone()
         {
             return Instantiate(this);
+        }
+
+        public void AddCellComponent(CellComponentType type)
+        {
+            var component = type.ToCellComponent();
+            component.name = $"{type.ToString()}, Parent: {name}";
+            CellComponents.Add(component);
+            AssetDatabase.AddObjectToAsset(component, this);
+            AssetDatabase.SaveAssets();
+        }
+
+        public void RemoveCellComponent(CellComponentType type)
+        {
+            CellComponent removeObj = null;
+            foreach (var component in CellComponents)
+            {
+                if (component.ToCellComponentType() == type)
+                {
+                    removeObj = component;
+                    break;
+                }
+            }
+            if (removeObj != null)
+            {
+                CellComponents.Remove(removeObj);
+                DestroyImmediate(removeObj, true);
+            }
+            else
+            {
+                Debug.LogWarning("指定された型のオブジェクトが見つかりませんでした。");
+            }
+            AssetDatabase.SaveAssets();
+        }
+
+        public void RemoveCellComponent(CellComponent obj)
+        {
+            if (obj != null)
+            {
+                if (CellComponents.Remove(obj))
+                {
+                    DestroyImmediate(obj, true);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("指定されたオブジェクトが見つかりませんでした。");
+            }
+            AssetDatabase.SaveAssets();
         }
     }
 
@@ -91,18 +139,11 @@ namespace GridCell
             var cellStatusProperty = serializedObject.FindProperty("_cellStatus");
             EditorGUILayout.PropertyField(cellStatusProperty);
 
-            var select = AttachmentSelector();
+            var select = AddComponentSelector();
 
             if (select != CellComponentType.Select)
             {
-                AddCellComponent(select);
-            }
-
-            if (GUILayout.Button("Clear")) // コンポーネントまとめて削除。（テスト用。）
-            {
-                foreach (var item in _cell.CellComponents)
-                    DestroyImmediate(item, true);
-                _cell.CellComponents.Clear();
+                _cell.AddCellComponent(select);
             }
 
             CellAttachmentInspectorView();
@@ -110,69 +151,38 @@ namespace GridCell
             serializedObject.ApplyModifiedProperties();
         }
 
-        private CellComponentType AttachmentSelector()
+        private CellComponentType AddComponentSelector()
         {
             return (CellComponentType)EditorGUILayout.EnumPopup("Select Add Component", CellComponentType.Select);
         }
 
-        private void AddCellComponent(CellComponentType type)
-        {
-            var attachment = type.ToCellComponent();
-            attachment.name = $"{type.ToString()}, Parent: {_cell.name}";
-            _cell.CellComponents.Add(attachment);
-            AssetDatabase.AddObjectToAsset(attachment, _cell);
-            AssetDatabase.SaveAssets();
-        }
-
-        private void RemoveCellComponent(CellComponentType type)
-        {
-            CellComponent removeObj = null;
-            foreach (var component in _cell.CellComponents)
-            {
-                if (component.ToCellComponentType() == type)
-                {
-                    removeObj = component;
-                    break;
-                }
-            }
-            if (removeObj != null)
-            {
-                _cell.CellComponents.Remove(removeObj);
-                DestroyImmediate(removeObj, true);
-            }
-            else
-            {
-                Debug.LogWarning("指定された型のオブジェクトが見つかりませんでした。");
-            }
-            AssetDatabase.SaveAssets();
-        }
-
-        private void RemoveCellComponent(CellComponent obj)
-        {
-            if (obj != null)
-            {
-                if (_cell.CellComponents.Remove(obj))
-                {
-                    DestroyImmediate(obj, true);
-                }
-            }
-            else
-            {
-                Debug.LogWarning("指定された型のオブジェクトが見つかりませんでした。");
-            }
-            AssetDatabase.SaveAssets();
-        }
+        private readonly List<CellComponent> _removeObjs = new List<CellComponent>();
 
         private void CellAttachmentInspectorView()
         {
             if (_cell.CellComponents == null) return;
+
+
             foreach (var component in _cell.CellComponents)
             {
                 Separator();
                 DestroyImmediate(_attachmentEditor);
+
+                if (GUILayout.Button("Remove Component"))
+                {
+                    _removeObjs.Add(component);
+                    continue;
+                }
+
                 _attachmentEditor = CreateEditor(component);
                 _attachmentEditor.OnInspectorGUI();
             }
+
+            foreach (var remove in _removeObjs)
+            {
+                _cell.RemoveCellComponent(remove);
+            }
+            _removeObjs.Clear();
         }
 
         public void Separator() // 仕切り線を表示する。

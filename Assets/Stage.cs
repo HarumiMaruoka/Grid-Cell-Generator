@@ -188,7 +188,7 @@ namespace GridCell
             if (_stage.TryGetCell(_stage.Cells, _cachedHeight, _cachedWidth, _cachedYPos, _cachedXPos, out Cell cell))
             {
                 _selectCellEditor = CreateEditor(cell);
-                _selectCellEditor?.OnInspectorGUI();
+                _selectCellEditor.OnInspectorGUI();
             }
             else
             {
